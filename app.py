@@ -120,7 +120,7 @@ with tab1:
         m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
         m_col3.metric("💳 総支出", f"{grand_total:,.0f} 円")
 
-        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（文字切れ防止・スマホ最適化）
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（%のみ表示）
         if not filtered_var_df.empty and var_total > 0:
             st.subheader(f"🎨 {selected_month} の変動費内訳")
             
@@ -131,17 +131,17 @@ with tab1:
                 hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            # 📱 文字を円の内側に配置し、凡例を下にすっきり配置して文字切れを防止
+            # 📱 グラフの内側は「%（パーセント）」のみに設定
             fig_var.update_traces(
                 textposition='inside', 
-                textinfo='percent+label',
+                textinfo='percent',
                 hovertemplate='%{label}: %{value:,}円 (%{percent})'
             )
             fig_var.update_layout(
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
-                    y=-0.2,
+                    y=-0.25,
                     xanchor="center",
                     x=0.5
                 ),
