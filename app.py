@@ -120,7 +120,7 @@ with tab1:
         m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
         m_col3.metric("💳 総支出", f"{grand_total:,.0f} 円")
 
-        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（%のみ表示）
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（下切れ防止・完全最適化）
         if not filtered_var_df.empty and var_total > 0:
             st.subheader(f"🎨 {selected_month} の変動費内訳")
             
@@ -131,7 +131,7 @@ with tab1:
                 hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            # 📱 グラフの内側は「%（パーセント）」のみに設定
+            # 📱 グラフの内側は%のみ表示、ツールチップで詳細確認可能
             fig_var.update_traces(
                 textposition='inside', 
                 textinfo='percent',
@@ -140,13 +140,13 @@ with tab1:
             fig_var.update_layout(
                 legend=dict(
                     orientation="h",
-                    yanchor="bottom",
-                    y=-0.25,
+                    yanchor="top",
+                    y=-0.1,
                     xanchor="center",
                     x=0.5
                 ),
-                margin=dict(t=20, b=50, l=10, r=10),
-                height=350
+                margin=dict(t=10, b=80, l=10, r=10),
+                autosize=True
             )
             st.plotly_chart(fig_var, use_container_width=True)
         else:
@@ -163,7 +163,7 @@ with tab1:
 
         st.divider()
 
-        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（折りたたみ表示 ＆ スマホ最適化）
+        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（下切れ防止・完全最適化）
         with st.expander("🔍 【サブ】固定費を含めた全体支出バランスを見る"):
             st.caption(f"毎月の固定費設定額: {fixed_total_monthly:,.0f} 円")
             
@@ -192,13 +192,13 @@ with tab1:
                 fig_sub.update_layout(
                     legend=dict(
                         orientation="h",
-                        yanchor="bottom",
-                        y=-0.3,
+                        yanchor="top",
+                        y=-0.1,
                         xanchor="center",
                         x=0.5
                     ),
-                    margin=dict(t=40, b=60, l=10, r=10),
-                    height=380
+                    margin=dict(t=30, b=100, l=10, r=10),
+                    autosize=True
                 )
                 st.plotly_chart(fig_sub, use_container_width=True)
 
