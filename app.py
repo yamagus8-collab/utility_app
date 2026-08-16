@@ -116,13 +116,14 @@ with tab1:
 
         # 💰 1. メインダッシュボード指標（変動費 ＆ 外食回数を前面表示）
         m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric("🛒 今月の変動費合計", f"{var_total:,.0f} 円")
+        m_col1.metric("🛒 今月の変動費", f"{var_total:,.0f} 円")
         m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
-        m_col3.metric("💳 総支出（固定費込）", f"{grand_total:,.0f} 円")
+        m_col3.metric("💳 総支出", f"{grand_total:,.0f} 円")
 
-        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（スマホ最適化）
         if not filtered_var_df.empty and var_total > 0:
             st.subheader(f"🎨 {selected_month} の変動費内訳")
+            
             fig_var = px.pie(
                 filtered_var_df, 
                 values='金額', 
@@ -130,7 +131,17 @@ with tab1:
                 hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            fig_var.update_traces(textinfo='percent+label')
+            # 📱 スマホ用に文字サイズ・位置・凡例非表示を最適化
+            fig_var.update_traces(
+                textposition='outside', 
+                textinfo='label+percent',
+                hovertemplate='%{label}: %{value:,}円 (%{percent})'
+            )
+            fig_var.update_layout(
+                showlegend=False,  # 上の邪魔な凡例を削除してグラフを巨大化
+                margin=dict(t=20, b=20, l=20, r=20),
+                height=380
+            )
             st.plotly_chart(fig_var, use_container_width=True)
         else:
             st.info("選択された月の変動費データはまだありません。")
@@ -146,7 +157,7 @@ with tab1:
 
         st.divider()
 
-        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（折りたたみ表示）
+        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（折りたたみ表示 ＆ スマホ最適化）
         with st.expander("🔍 【サブ】固定費を含めた全体支出バランスを見る"):
             st.caption(f"毎月の固定費設定額: {fixed_total_monthly:,.0f} 円")
             
@@ -167,7 +178,17 @@ with tab1:
                     hole=0.4,
                     color_discrete_sequence=px.colors.qualitative.Pastel
                 )
-                fig_sub.update_traces(textinfo='percent+label')
+                # 📱 サブグラフも同様にスマホ最適化
+                fig_sub.update_traces(
+                    textposition='outside', 
+                    textinfo='label+percent',
+                    hovertemplate='%{label}: %{value:,}円 (%{percent})'
+                )
+                fig_sub.update_layout(
+                    showlegend=False,
+                    margin=dict(t=40, b=20, l=20, r=20),
+                    height=380
+                )
                 st.plotly_chart(fig_sub, use_container_width=True)
 
     else:
