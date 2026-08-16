@@ -114,13 +114,13 @@ with tab1:
 
         grand_total = fixed_total_monthly + var_total
 
-        # 💰 1. メインダッシュボード指標（変動費 ＆ 外食回数を前面表示）
+        # 💰 1. メインダッシュボード指標
         m_col1, m_col2, m_col3 = st.columns(3)
         m_col1.metric("🛒 今月の変動費", f"{var_total:,.0f} 円")
         m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
         m_col3.metric("💳 総支出", f"{grand_total:,.0f} 円")
 
-        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（スマホ最適化）
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（文字切れ防止・スマホ最適化）
         if not filtered_var_df.empty and var_total > 0:
             st.subheader(f"🎨 {selected_month} の変動費内訳")
             
@@ -131,16 +131,22 @@ with tab1:
                 hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            # 📱 スマホ用に文字サイズ・位置・凡例非表示を最適化
+            # 📱 文字を円の内側に配置し、凡例を下にすっきり配置して文字切れを防止
             fig_var.update_traces(
-                textposition='outside', 
-                textinfo='label+percent',
+                textposition='inside', 
+                textinfo='percent+label',
                 hovertemplate='%{label}: %{value:,}円 (%{percent})'
             )
             fig_var.update_layout(
-                showlegend=False,  # 上の邪魔な凡例を削除してグラフを巨大化
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=380
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.2,
+                    xanchor="center",
+                    x=0.5
+                ),
+                margin=dict(t=20, b=50, l=10, r=10),
+                height=350
             )
             st.plotly_chart(fig_var, use_container_width=True)
         else:
@@ -178,15 +184,20 @@ with tab1:
                     hole=0.4,
                     color_discrete_sequence=px.colors.qualitative.Pastel
                 )
-                # 📱 サブグラフも同様にスマホ最適化
                 fig_sub.update_traces(
-                    textposition='outside', 
-                    textinfo='label+percent',
+                    textposition='inside', 
+                    textinfo='percent',
                     hovertemplate='%{label}: %{value:,}円 (%{percent})'
                 )
                 fig_sub.update_layout(
-                    showlegend=False,
-                    margin=dict(t=40, b=20, l=20, r=20),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.3,
+                        xanchor="center",
+                        x=0.5
+                    ),
+                    margin=dict(t=40, b=60, l=10, r=10),
                     height=380
                 )
                 st.plotly_chart(fig_sub, use_container_width=True)
