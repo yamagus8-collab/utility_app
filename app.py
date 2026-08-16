@@ -12,7 +12,6 @@ def get_gspread_client():
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]
-    # Streamlit CloudのSecretsから鍵情報を読み込み
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=scopes
@@ -69,7 +68,7 @@ with tab1:
 
     with col2:
         amount = st.number_input("金額 (円)", min_value=0, step=100, value=1000)
-        memo = st.text_input("メモ（店舗名など）", placeholder="例：スーパー買い物")
+        memo = st.text_input("メモ（店舗名など）", placeholder="例：ラーメン店、スーパー買い物など")
 
     if st.button("✨ スプレッドシートに保存", type="primary"):
         new_row = [str(date_val), "変動費", minor_cat, int(amount), memo]
@@ -78,7 +77,7 @@ with tab1:
 
     st.divider()
 
-    st.header("📊 支出データの自動集計")
+    st.header("📊 今月の変動費ダッシュボード")
 
     raw_var_data = sheet_variable.get_all_records()
     raw_fix_data = sheet_fixed.get_all_records()
@@ -104,40 +103,73 @@ with tab1:
         filtered_var_df = df_var[df_var['年月'] == selected_month].copy()
         var_total = filtered_var_df['金額'].sum() if not filtered_var_df.empty else 0
 
+        # 🍔 当月の外食回数と外食合計金額をカウント
+        if not filtered_var_df.empty and '中分類' in filtered_var_df.columns:
+            eat_out_df = filtered_var_df[filtered_var_df['中分類'] == '外食費']
+            eat_out_count = len(eat_out_df)
+            eat_out_total = eat_out_df['金額'].sum()
+        else:
+            eat_out_count = 0
+            eat_out_total = 0
+
         grand_total = fixed_total_monthly + var_total
 
+        # 💰 1. メインダッシュボード指標（変動費 ＆ 外食回数を前面表示）
         m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric("総支出合計", f"{grand_total:,.0f} 円")
-        m_col2.metric("固定費（自動反映）", f"{fixed_total_monthly:,.0f} 円")
-        m_col3.metric("変動費合計", f"{var_total:,.0f} 円")
+        m_col1.metric("🛒 今月の変動費合計", f"{var_total:,.0f} 円")
+        m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
+        m_col3.metric("💳 総支出（固定費込）", f"{grand_total:,.0f} 円")
 
-        df_fix_chart = df_fix.copy()
-        df_fix_chart['大分類'] = '固定費'
-
-        df_var_chart = filtered_var_df[['中分類', '金額']].copy() if not filtered_var_df.empty else pd.DataFrame(columns=['中分類', '金額'])
-        df_var_chart['大分類'] = '変動費'
-
-        combined_df = pd.concat([df_fix_chart, df_var_chart], ignore_index=True)
-
-        if not combined_df.empty and combined_df['金額'].sum() > 0:
-            fig = px.pie(
-                combined_df, 
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ
+        if not filtered_var_df.empty and var_total > 0:
+            st.subheader(f"🎨 {selected_month} の変動費内訳")
+            fig_var = px.pie(
+                filtered_var_df, 
                 values='金額', 
                 names='中分類', 
-                title=f'📊 {selected_month} の支出割合（固定費＋変動費）',
                 hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Pastel
+                color_discrete_sequence=px.colors.qualitative.Set3
             )
-            fig.update_traces(textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
+            fig_var.update_traces(textinfo='percent+label')
+            st.plotly_chart(fig_var, use_container_width=True)
+        else:
+            st.info("選択された月の変動費データはまだありません。")
 
-        with st.expander("📋 選択月の変動費 登録履歴一覧を見る"):
+        # 📋 変動費の登録履歴一覧
+        with st.expander("📋 今月の変動費 登録履歴一覧を見る"):
             if not filtered_var_df.empty:
                 display_df = filtered_var_df.copy()
                 display_df['日付'] = display_df['日付'].dt.strftime('%Y-%m-%d')
                 st.dataframe(display_df.drop(columns=['年月']).sort_index(ascending=False), use_container_width=True)
             else:
-                st.info("この月の変動費データはまだありません。")
+                st.info("履歴はありません。")
+
+        st.divider()
+
+        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（折りたたみ表示）
+        with st.expander("🔍 【サブ】固定費を含めた全体支出バランスを見る"):
+            st.caption(f"毎月の固定費設定額: {fixed_total_monthly:,.0f} 円")
+            
+            df_fix_chart = df_fix.copy()
+            df_fix_chart['大分類'] = '固定費'
+
+            df_var_chart = filtered_var_df[['中分類', '金額']].copy() if not filtered_var_df.empty else pd.DataFrame(columns=['中分類', '金額'])
+            df_var_chart['大分類'] = '変動費'
+
+            combined_df = pd.concat([df_fix_chart, df_var_chart], ignore_index=True)
+
+            if not combined_df.empty and combined_df['金額'].sum() > 0:
+                fig_sub = px.pie(
+                    combined_df, 
+                    values='金額', 
+                    names='中分類', 
+                    title=f'固定費 ＋ 変動費 全体割合（{selected_month}）',
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                fig_sub.update_traces(textinfo='percent+label')
+                st.plotly_chart(fig_sub, use_container_width=True)
+
     else:
         st.info("まだ変動費データが登録されていません。上のフォームから入力してください！")
 
@@ -146,7 +178,7 @@ with tab1:
 # ---------------------------------------------------------
 with tab2:
     st.header("⚙️ 毎月の固定費設定")
-    st.caption("ここで設定した金額は、毎月自動的に総支出およびグラフへ計算・引き継ぎされます。")
+    st.caption("ここで設定した金額は、毎月自動的に総支出および全体グラフへ計算・引き継ぎされます。")
 
     raw_fix_data = sheet_fixed.get_all_records()
     df_fix_current = pd.DataFrame(raw_fix_data) if raw_fix_data else pd.DataFrame(columns=['中分類', '金額'])
