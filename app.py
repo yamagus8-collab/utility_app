@@ -52,8 +52,8 @@ st.title("我が家の家計簿アプリ")
 VARIABLE_CATEGORIES = ["外食費", "医療費", "娯楽", "その他（自炊、日用品、服、ガソリン代など）"]
 FIXED_CATEGORIES = ["住宅ローン", "光熱費", "保険", "通信費", "学費（習い事含む）", "サブスク"]
 
-# タブ切り替え
-tab1, tab2 = st.tabs(["📝 日々の入力・集計", "⚙️ 固定費の設定・見直し"])
+# タブ切り替え（3つのタブに拡張）
+tab1, tab2, tab3 = st.tabs(["📝 日々の入力・集計", "✏️ データの修正・削除", "⚙️ 固定費の設定・見直し"])
 
 # ---------------------------------------------------------
 # TAB 1: 日々の変動費入力 ＆ 月別自動集計
@@ -74,6 +74,7 @@ with tab1:
         new_row = [str(date_val), "変動費", minor_cat, int(amount), memo]
         sheet_variable.append_row(new_row)
         st.success("✅ スプレッドシートに保存しました！")
+        st.rerun()
 
     st.divider()
 
@@ -120,7 +121,7 @@ with tab1:
         m_col2.metric("🍔 外食回数", f"{eat_out_count} 回", delta=f"計 {eat_out_total:,.0f}円" if eat_out_count > 0 else None, delta_color="normal")
         m_col3.metric("💳 総支出", f"{grand_total:,.0f} 円")
 
-        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ（下切れ防止・完全最適化）
+        # 🎯 2. 【メイン画面】変動費だけの内訳円グラフ
         if not filtered_var_df.empty and var_total > 0:
             st.subheader(f"🎨 {selected_month} の変動費内訳")
             
@@ -131,7 +132,6 @@ with tab1:
                 hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            # 📱 グラフの内側は%のみ表示、ツールチップで詳細確認可能
             fig_var.update_traces(
                 textposition='inside', 
                 textinfo='percent',
@@ -163,7 +163,7 @@ with tab1:
 
         st.divider()
 
-        # 🔻 3. 【サブ表示】固定費を含めた全体バランス（下切れ防止・完全最適化）
+        # 🔻 3. 【サブ表示】固定費を含めた全体バランス
         with st.expander("🔍 【サブ】固定費を含めた全体支出バランスを見る"):
             st.caption(f"毎月の固定費設定額: {fixed_total_monthly:,.0f} 円")
             
@@ -206,9 +206,75 @@ with tab1:
         st.info("まだ変動費データが登録されていません。上のフォームから入力してください！")
 
 # ---------------------------------------------------------
-# TAB 2: 固定費の設定・定期見直し
+# TAB 2: 変動費の修正・削除（新規追加機能！）
 # ---------------------------------------------------------
 with tab2:
+    st.header("✏️ 登録データの修正・削除")
+    
+    raw_var_all = sheet_variable.get_all_records()
+    if raw_var_all:
+        df_edit = pd.DataFrame(raw_var_all)
+        
+        # データの選択リスト作成（行番号＋日付＋中分類＋金額＋メモ）
+        options = []
+        for idx, row in df_edit.iterrows():
+            # スプレッドシートの実際の行番号（ヘッダーがあるため +2）
+            sheet_row_num = idx + 2
+            options.append(f"【行 {sheet_row_num}】{row.get('日付')} | {row.get('中分類')} | {row.get('金額'):,}円 | {row.get('メモ')}")
+            
+        selected_option = st.selectbox("修正または削除するデータを選択してください", options)
+        
+        # 選択された行のインデックスとスプレッドシート行番号を取得
+        selected_idx = options.index(selected_option)
+        target_row_num = selected_idx + 2
+        target_data = df_edit.iloc[selected_idx]
+        
+        st.subheader(f"🛠️ 行 {target_row_num} の編集")
+        
+        # 既存データを初期値とした入力フォーム
+        try:
+            init_date = datetime.datetime.strptime(str(target_data.get('日付')), "%Y-%m-%d").date()
+        except Exception:
+            init_date = datetime.date.today()
+            
+        edit_date = st.date_input("日付の変更", value=init_date)
+        
+        current_cat = str(target_data.get('中分類'))
+        cat_index = VARIABLE_CATEGORIES.index(current_cat) if current_cat in VARIABLE_CATEGORIES else 0
+        edit_cat = st.selectbox("項目の変更", VARIABLE_CATEGORIES, index=cat_index)
+        
+        try:
+            init_amount = int(target_data.get('金額'))
+        except Exception:
+            init_amount = 0
+        edit_amount = st.number_input("金額の変更 (円)", min_value=0, step=100, value=init_amount)
+        
+        edit_memo = st.text_input("メモの変更", value=str(target_data.get('メモ')))
+        
+        col_edit1, col_edit2 = st.columns(2)
+        
+        # 🔄 上書き更新ボタン
+        with col_edit1:
+            if st.button("🔄 修正内容を更新する", type="primary"):
+                updated_row = [str(edit_date), "変動費", edit_cat, int(edit_amount), edit_memo]
+                # gspreadのupdateは範囲指定（例: 'A2:E2'）
+                sheet_variable.update(f"A{target_row_num}:E{target_row_num}", [updated_row])
+                st.success(f"✅ 行 {target_row_num} のデータを更新しました！")
+                st.rerun()
+                
+        # 🗑️ 削除ボタン
+        with col_edit2:
+            if st.button("🗑️ このデータを削除する"):
+                sheet_variable.delete_rows(target_row_num)
+                st.warning(f"🗑️ 行 {target_row_num} のデータを削除しました。")
+                st.rerun()
+    else:
+        st.info("修正・削除できる変動費データがまだありません。")
+
+# ---------------------------------------------------------
+# TAB 3: 固定費の設定・定期見直し
+# ---------------------------------------------------------
+with tab3:
     st.header("⚙️ 毎月の固定費設定")
     st.caption("ここで設定した金額は、毎月自動的に総支出および全体グラフへ計算・引き継ぎされます。")
 
