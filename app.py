@@ -52,7 +52,7 @@ st.title("我が家の家計簿アプリ")
 VARIABLE_CATEGORIES = ["外食費", "医療費", "娯楽", "その他（自炊、日用品、服、ガソリン代など）"]
 FIXED_CATEGORIES = ["住宅ローン", "光熱費", "保険", "通信費", "学費（習い事含む）", "サブスク"]
 
-# タブ切り替え（3つのタブに拡張）
+# タブ切り替え
 tab1, tab2, tab3 = st.tabs(["📝 日々の入力・集計", "✏️ データの修正・削除", "⚙️ 固定費の設定・見直し"])
 
 # ---------------------------------------------------------
@@ -80,8 +80,12 @@ with tab1:
 
     st.header("📊 今月の変動費ダッシュボード")
 
-    raw_var_data = sheet_variable.get_all_records()
-    raw_fix_data = sheet_fixed.get_all_records()
+    try:
+        raw_var_data = sheet_variable.get_all_records()
+        raw_fix_data = sheet_fixed.get_all_records()
+    except Exception as e:
+        st.error(f"データの取得に失敗しました。少し時間を置いて再読み込みしてください: {e}")
+        st.stop()
 
     df_fix = pd.DataFrame(raw_fix_data) if raw_fix_data else pd.DataFrame(columns=['中分類', '金額'])
     df_fix['金額'] = pd.to_numeric(df_fix['金額'], errors='coerce').fillna(0)
@@ -206,32 +210,32 @@ with tab1:
         st.info("まだ変動費データが登録されていません。上のフォームから入力してください！")
 
 # ---------------------------------------------------------
-# TAB 2: 変動費の修正・削除（新規追加機能！）
+# TAB 2: 変動費の修正・削除（安全通信処理に修正）
 # ---------------------------------------------------------
 with tab2:
     st.header("✏️ 登録データの修正・削除")
     
-    raw_var_all = sheet_variable.get_all_records()
+    try:
+        raw_var_all = sheet_variable.get_all_records()
+    except Exception:
+        raw_var_all = []
+
     if raw_var_all:
         df_edit = pd.DataFrame(raw_var_all)
         
-        # データの選択リスト作成（行番号＋日付＋中分類＋金額＋メモ）
         options = []
         for idx, row in df_edit.iterrows():
-            # スプレッドシートの実際の行番号（ヘッダーがあるため +2）
             sheet_row_num = idx + 2
             options.append(f"【行 {sheet_row_num}】{row.get('日付')} | {row.get('中分類')} | {row.get('金額'):,}円 | {row.get('メモ')}")
             
         selected_option = st.selectbox("修正または削除するデータを選択してください", options)
         
-        # 選択された行のインデックスとスプレッドシート行番号を取得
         selected_idx = options.index(selected_option)
         target_row_num = selected_idx + 2
         target_data = df_edit.iloc[selected_idx]
         
         st.subheader(f"🛠️ 行 {target_row_num} の編集")
         
-        # 既存データを初期値とした入力フォーム
         try:
             init_date = datetime.datetime.strptime(str(target_data.get('日付')), "%Y-%m-%d").date()
         except Exception:
@@ -253,12 +257,12 @@ with tab2:
         
         col_edit1, col_edit2 = st.columns(2)
         
-        # 🔄 上書き更新ボタン
+        # 🔄 上書き更新ボタン（API安全仕様）
         with col_edit1:
             if st.button("🔄 修正内容を更新する", type="primary"):
                 updated_row = [str(edit_date), "変動費", edit_cat, int(edit_amount), edit_memo]
-                # gspreadのupdateは範囲指定（例: 'A2:E2'）
-                sheet_variable.update(f"A{target_row_num}:E{target_row_num}", [updated_row])
+                cell_range = f"A{target_row_num}:E{target_row_num}"
+                sheet_variable.update(range_name=cell_range, values=[updated_row])
                 st.success(f"✅ 行 {target_row_num} のデータを更新しました！")
                 st.rerun()
                 
@@ -278,7 +282,11 @@ with tab3:
     st.header("⚙️ 毎月の固定費設定")
     st.caption("ここで設定した金額は、毎月自動的に総支出および全体グラフへ計算・引き継ぎされます。")
 
-    raw_fix_data = sheet_fixed.get_all_records()
+    try:
+        raw_fix_data = sheet_fixed.get_all_records()
+    except Exception:
+        raw_fix_data = []
+
     df_fix_current = pd.DataFrame(raw_fix_data) if raw_fix_data else pd.DataFrame(columns=['中分類', '金額'])
 
     updated_costs = {}
